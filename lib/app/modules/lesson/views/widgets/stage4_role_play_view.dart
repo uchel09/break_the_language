@@ -52,7 +52,7 @@ class Stage4RolePlayView extends GetView<LessonController> {
                   ),
                   const SizedBox(height: 4),
                   const Text(
-                    'Pilih karaktermu, rekam suaramu di giliranmu, lalu putar Duet Playback bersama suara native dan latar kedai kopi.',
+                    'Pilih karaktermu, rekam suaramu di giliranmu, lalu putar Duet Playback bersama suara native dan latar suasana cerita.',
                     style: TextStyle(fontSize: 13, color: Color(0xFFCBD5E1)),
                   ),
                   const SizedBox(height: 12),

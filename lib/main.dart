@@ -15,8 +15,12 @@ class InitialBinding extends Bindings {
       () => LocalSpeakingEvaluator(),
       fenix: true,
     );
-    Get.put<AudioEngineService>(AudioEngineService(), permanent: true);
-    Get.put<SpeechToolsService>(SpeechToolsService(), permanent: true);
+    if (!Get.isRegistered<AudioEngineService>()) {
+      Get.put<AudioEngineService>(AudioEngineService(), permanent: true);
+    }
+    if (!Get.isRegistered<SpeechToolsService>()) {
+      Get.put<SpeechToolsService>(SpeechToolsService(), permanent: true);
+    }
   }
 }
 

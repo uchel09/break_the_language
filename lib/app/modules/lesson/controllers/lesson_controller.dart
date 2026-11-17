@@ -174,6 +174,14 @@ class LessonController extends GetxController {
       if (loaded.characters.isNotEmpty) {
         selectedRoleId.value = loaded.characters.first.id;
       }
+      if (audioEngine.hasActiveBackgroundSession &&
+          audioEngine.activeTopicTitle.value == loaded.title) {
+        listeningMode.value = audioEngine.activeRealSituation.value
+            ? ListeningMode.realSituation
+            : (audioEngine.activeSlowMode.value
+                ? ListeningMode.slow
+                : ListeningMode.normal);
+      }
       unawaited(audioEngine.preloadTopicAssets(loaded));
     } catch (e) {
       errorMessage.value = 'Gagal memuat materi topik: $e';
@@ -212,7 +220,11 @@ class LessonController extends GetxController {
 
   Future<void> setListeningMode(ListeningMode mode) async {
     listeningMode.value = mode;
-    if (audioEngine.isPlayingVoice.value) {
+    if (audioEngine.isSequencePlaying.value) {
+      final currentLine = audioEngine.activeLineIndex.value;
+      final idx = topic.value?.dialogue.indexWhere((l) => l.index == currentLine) ?? -1;
+      await playStage1Full(startFromIndex: idx >= 0 ? idx : 0);
+    } else if (audioEngine.isPlayingVoice.value) {
       await playStage1Full(startFromIndex: 0);
     } else if (mode != ListeningMode.realSituation) {
       await audioEngine.stopAmbience();
@@ -222,6 +234,11 @@ class LessonController extends GetxController {
   Future<void> playStage1Full({int startFromIndex = 0}) async {
     final data = topic.value;
     if (data == null) return;
+    audioEngine.setActiveTopicContext(
+      meta: _resolvedMeta,
+      title: data.title,
+      totalLines: data.dialogue.length,
+    );
     await audioEngine.playDialogueSequence(
       lines: data.dialogue,
       slow: listeningMode.value == ListeningMode.slow,
@@ -234,6 +251,16 @@ class LessonController extends GetxController {
   Future<void> playSingleLine(DialogueLine line) async {
     final data = topic.value;
     if (data == null) return;
+    if (audioEngine.isSequencePlaying.value) {
+      final idx = data.dialogue.indexWhere((l) => l.index == line.index);
+      await playStage1Full(startFromIndex: idx >= 0 ? idx : 0);
+      return;
+    }
+    audioEngine.setActiveTopicContext(
+      meta: _resolvedMeta,
+      title: data.title,
+      totalLines: data.dialogue.length,
+    );
     final useSlow = listeningMode.value == ListeningMode.slow;
     final path = useSlow ? line.audioSlow : line.audio;
     if (listeningMode.value == ListeningMode.realSituation &&
@@ -242,10 +269,10 @@ class LessonController extends GetxController {
     }
     if (listeningMode.value == ListeningMode.realSituation &&
         line.sfxBefore != null) {
-      final sfx = line.sfxBefore == 'door_chime'
-          ? data.audioAssets.sfxDoorChime
-          : data.audioAssets.sfxBookPat;
-      await audioEngine.playSfx(sfx);
+      final sfx = data.audioAssets.resolveCue(line.sfxBefore!);
+      if (sfx != null && sfx.isNotEmpty) {
+        await audioEngine.playSfx(sfx);
+      }
     }
     await audioEngine.playSingleAsset(path, lineIndex: line.index);
   }
@@ -257,6 +284,11 @@ class LessonController extends GetxController {
   Future<void> toggleAmbiencePreview() async {
     final data = topic.value;
     if (data == null) return;
+    audioEngine.setActiveTopicContext(
+      meta: _resolvedMeta,
+      title: data.title,
+      totalLines: data.dialogue.length,
+    );
     if (audioEngine.isAmbienceActive.value) {
       await audioEngine.stopAmbience();
     } else {
@@ -722,7 +754,11 @@ class LessonController extends GetxController {
   void onClose() {
     _rapidTimer?.cancel();
     _bossTimer?.cancel();
-    unawaited(audioEngine.stopAll());
+    final keepBackgroundAudio = audioEngine.backgroundPlaybackEnabled.value &&
+        audioEngine.hasActiveBackgroundSession;
+    if (!keepBackgroundAudio) {
+      unawaited(audioEngine.stopAll());
+    }
     unawaited(speechTools.stopRecording());
     unawaited(speechTools.stopTts());
     super.onClose();

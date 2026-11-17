@@ -182,9 +182,9 @@ class LessonView extends GetView<LessonController> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Rapor Penilaian Lokal Topik 01',
-                  style: TextStyle(
+                Text(
+                  'Rapor Penilaian Lokal · ${controller.topic.value?.title ?? 'Topik'}',
+                  style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w800,
                     color: Color(0xFFF8FAFC),

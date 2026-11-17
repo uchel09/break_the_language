@@ -3,12 +3,18 @@ import 'package:get/get.dart';
 
 import '../../../data/models/lesson_topic_model.dart';
 import '../../../data/repositories/lesson_repository.dart';
+import '../../../data/services/audio_engine_service.dart';
 import '../../../routes/app_pages.dart';
 
 class HomeController extends GetxController {
   final LessonRepository _repository = Get.isRegistered<LessonRepository>()
       ? Get.find<LessonRepository>()
       : Get.put(LessonRepository());
+
+  late final AudioEngineService audioEngine =
+      Get.isRegistered<AudioEngineService>()
+          ? Get.find<AudioEngineService>()
+          : Get.put(AudioEngineService(), permanent: true);
 
   final curriculum = <CurriculumLesson>[].obs;
   final selectedLessonNumber = 1.obs;
@@ -39,6 +45,16 @@ class HomeController extends GetxController {
     return null;
   }
 
+  CurriculumTopicMeta? get latestReadyTopic {
+    CurriculumTopicMeta? latest;
+    for (final lesson in curriculum) {
+      for (final topic in lesson.topics) {
+        if (topic.isReady) latest = topic;
+      }
+    }
+    return latest;
+  }
+
   @override
   void onInit() {
     super.onInit();
@@ -47,6 +63,16 @@ class HomeController extends GetxController {
 
   void selectLesson(int lessonNumber) {
     selectedLessonNumber.value = lessonNumber;
+  }
+
+  void openActiveAudioTopic() {
+    final activeMeta = audioEngine.activeTopicMeta.value;
+    if (activeMeta != null) {
+      openTopic(activeMeta);
+      return;
+    }
+    final fallback = latestReadyTopic ?? firstReadyTopic;
+    if (fallback != null) openTopic(fallback);
   }
 
   void openTopic(CurriculumTopicMeta topic) {

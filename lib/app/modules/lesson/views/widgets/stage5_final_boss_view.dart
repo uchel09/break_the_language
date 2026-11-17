@@ -88,7 +88,7 @@ class Stage5FinalBossView extends GetView<LessonController> {
                             ButtonSegment(
                               value: i,
                               label: Text(
-                                i == 0 ? 'Retell (Maya)' : 'My Own Story',
+                                i == 0 ? 'Retell Story' : 'My Own Story',
                               ),
                             ),
                         ],

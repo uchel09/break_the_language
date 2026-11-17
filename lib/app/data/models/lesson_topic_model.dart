@@ -80,19 +80,41 @@ class CharacterInfo {
 class AudioAssetsInfo {
   const AudioAssetsInfo({
     required this.ambienceLoop,
-    required this.sfxDoorChime,
-    required this.sfxBookPat,
+    this.sfxDoorChime = '',
+    this.sfxBookPat = '',
+    this.cues = const {},
   });
 
   final String ambienceLoop;
   final String sfxDoorChime;
   final String sfxBookPat;
+  final Map<String, String> cues;
+
+  String? resolveCue(String cue) {
+    final mapped = cues[cue];
+    if (mapped != null && mapped.isNotEmpty) return mapped;
+    if (cue == 'door_chime' && sfxDoorChime.isNotEmpty) return sfxDoorChime;
+    if (cue == 'book_pat' && sfxBookPat.isNotEmpty) return sfxBookPat;
+    return null;
+  }
+
+  List<String> get allSfxPaths => {
+        if (ambienceLoop.isNotEmpty) ambienceLoop,
+        if (sfxDoorChime.isNotEmpty) sfxDoorChime,
+        if (sfxBookPat.isNotEmpty) sfxBookPat,
+        for (final path in cues.values)
+          if (path.isNotEmpty) path,
+      }.toList();
 
   factory AudioAssetsInfo.fromJson(Map<String, dynamic> json) {
+    final rawCues = json['cues'] as Map<String, dynamic>? ?? const {};
     return AudioAssetsInfo(
       ambienceLoop: (json['ambienceLoop'] ?? '').toString(),
       sfxDoorChime: (json['sfxDoorChime'] ?? '').toString(),
       sfxBookPat: (json['sfxBookPat'] ?? '').toString(),
+      cues: rawCues.map(
+        (key, value) => MapEntry(key.toString(), value.toString()),
+      ),
     );
   }
 }

@@ -68,8 +68,11 @@ flutter:
     - assets/data/lessons/lesson_01/
     - assets/audio/lessons/lesson_01/topic_01/lines/
     - assets/audio/lessons/lesson_01/topic_01/lines_slow/
+    - assets/audio/lessons/lesson_01/topic_02/lines/
+    - assets/audio/lessons/lesson_01/topic_02/lines_slow/
     - assets/audio/sfx/
     - assets/images/lessons/lesson_01/topic_01/
+    - assets/images/lessons/lesson_01/topic_02/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

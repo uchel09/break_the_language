@@ -47,7 +47,7 @@ class HomeView extends GetView<HomeController> {
       ),
       body: Obx(() {
         final activeLesson = controller.activeLesson;
-        final featured = controller.firstReadyTopic;
+        final featured = controller.latestReadyTopic;
 
         return Center(
           child: ConstrainedBox(
@@ -147,6 +147,12 @@ class HomeView extends GetView<HomeController> {
           ),
         );
       }),
+      bottomNavigationBar: Obx(() {
+        if (!controller.audioEngine.hasActiveBackgroundSession) {
+          return const SizedBox.shrink();
+        }
+        return const _HomeBackgroundPlayerBar();
+      }),
     );
   }
 }
@@ -241,9 +247,9 @@ class _FeaturedHeroCard extends GetView<HomeController> {
               ),
               onPressed: () => controller.openTopic(topic),
               icon: const Icon(Icons.play_arrow_rounded),
-              label: const Text(
-                'Mulai Lesson 01 — Topic 01',
-                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+              label: Text(
+                'Mulai Lesson ${topic.lessonNumber.toString().padLeft(2, '0')} — Topic ${topic.topicNumber.toString().padLeft(2, '0')}',
+                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
               ),
             ),
           ),
@@ -456,5 +462,132 @@ class _TopicTile extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _HomeBackgroundPlayerBar extends GetView<HomeController> {
+  const _HomeBackgroundPlayerBar();
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final engine = controller.audioEngine;
+      final lineIdx = engine.activeLineIndex.value;
+      final total = engine.activeTotalLines.value;
+      final loopOn = engine.isLoopEnabled.value;
+      final title = engine.activeTopicTitle.value.isNotEmpty
+          ? engine.activeTopicTitle.value
+          : 'Audio Pembelajaran';
+
+      final statusText = lineIdx >= 0 && total > 0
+          ? 'Baris ${lineIdx + 1}/$total${loopOn ? ' · Non-Stop' : ''}'
+          : (engine.isAmbienceActive.value
+              ? 'Suasana latar aktif${loopOn ? ' · Non-Stop' : ''}'
+              : 'Sedang diputar${loopOn ? ' · Non-Stop' : ''}');
+
+      return Container(
+        decoration: const BoxDecoration(
+          color: Color(0xFF0B1120),
+          border: Border(
+            top: BorderSide(color: Color(0xFFF59E0B), width: 1.5),
+          ),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Center(
+            heightFactor: 1,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 960),
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF59E0B).withValues(alpha: 0.18),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(
+                        Icons.headphones_rounded,
+                        color: Color(0xFFF59E0B),
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: InkWell(
+                        onTap: controller.openActiveAudioTopic,
+                        borderRadius: BorderRadius.circular(8),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFFF8FAFC),
+                              ),
+                            ),
+                            Text(
+                              statusText,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: Color(0xFF38BDF8),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: loopOn
+                          ? 'Matikan Non-Stop Loop'
+                          : 'Aktifkan Non-Stop Loop',
+                      onPressed: engine.toggleLoop,
+                      icon: Icon(
+                        loopOn
+                            ? Icons.repeat_on_rounded
+                            : Icons.repeat_rounded,
+                        color: loopOn
+                            ? const Color(0xFF10B981)
+                            : const Color(0xFF94A3B8),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Buka Topik',
+                      onPressed: controller.openActiveAudioTopic,
+                      icon: const Icon(
+                        Icons.open_in_new_rounded,
+                        color: Color(0xFFCBD5E1),
+                        size: 20,
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Hentikan Audio',
+                      onPressed: engine.stopAll,
+                      icon: const Icon(
+                        Icons.stop_circle_rounded,
+                        color: Color(0xFFEF4444),
+                        size: 28,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    });
   }
 }

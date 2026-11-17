@@ -16,6 +16,8 @@ class Stage1DeepListeningView extends GetView<LessonController> {
       final mode = controller.listeningMode.value;
       final playing = controller.audioEngine.isPlayingVoice.value;
       final ambienceOn = controller.audioEngine.isAmbienceActive.value;
+      final loopOn = controller.audioEngine.isLoopEnabled.value;
+      final bgPlayOn = controller.audioEngine.backgroundPlaybackEnabled.value;
       final activeLine = controller.audioEngine.activeLineIndex.value;
 
       return ListView(
@@ -40,7 +42,7 @@ class Stage1DeepListeningView extends GetView<LessonController> {
                     mode == ListeningMode.slow
                         ? 'Menggunakan rekaman Native Slow asli (bukan perlambatan digital) supaya pelafalan & jeda terdengar jernih.'
                         : mode == ListeningMode.realSituation
-                            ? 'Dual-Track Real Situation: dialog + suasana kedai kopi kontinu + bel pintu & tepukan buku.'
+                            ? 'Dual-Track Real Situation: dialog + suasana latar cerita kontinu + efek suara adegan.'
                             : 'Mode Normal: kecepatan percakapan native sehari-hari tanpa suara latar.',
                     style: const TextStyle(
                       fontSize: 13,
@@ -105,13 +107,13 @@ class Stage1DeepListeningView extends GetView<LessonController> {
                         const SizedBox(width: 8),
                         IconButton.filledTonal(
                           tooltip: ambienceOn
-                              ? 'Matikan suasana kafe'
-                              : 'Tes suara kafe kontinu',
+                              ? 'Matikan suasana latar'
+                              : 'Tes suasana latar kontinu',
                           onPressed: controller.toggleAmbiencePreview,
                           icon: Icon(
                             ambienceOn
                                 ? Icons.volume_up_rounded
-                                : Icons.coffee_rounded,
+                                : Icons.surround_sound_rounded,
                             color: ambienceOn
                                 ? const Color(0xFF10B981)
                                 : const Color(0xFF94A3B8),
@@ -131,7 +133,7 @@ class Stage1DeepListeningView extends GetView<LessonController> {
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          'Ambience Kafe ${(controller.audioEngine.ambienceVolume.value * 100).round()}%',
+                          'Ambience Latar ${(controller.audioEngine.ambienceVolume.value * 100).round()}%',
                           style: const TextStyle(
                             fontSize: 12,
                             color: Color(0xFF94A3B8),
@@ -148,11 +150,39 @@ class Stage1DeepListeningView extends GetView<LessonController> {
                       ],
                     ),
                   ],
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 8),
                   Wrap(
                     spacing: 10,
                     runSpacing: 8,
                     children: [
+                      FilterChip(
+                        avatar: Icon(
+                          loopOn
+                              ? Icons.repeat_on_rounded
+                              : Icons.repeat_rounded,
+                          size: 16,
+                          color: loopOn
+                              ? const Color(0xFF10B981)
+                              : const Color(0xFF94A3B8),
+                        ),
+                        label: const Text('Non-Stop (Ulang Terus)'),
+                        selected: loopOn,
+                        onSelected: (v) =>
+                            controller.audioEngine.isLoopEnabled.value = v,
+                      ),
+                      FilterChip(
+                        avatar: Icon(
+                          Icons.headphones_rounded,
+                          size: 16,
+                          color: bgPlayOn
+                              ? const Color(0xFFF59E0B)
+                              : const Color(0xFF94A3B8),
+                        ),
+                        label: const Text('Putar Latar Belakang'),
+                        selected: bgPlayOn,
+                        onSelected: (v) => controller
+                            .audioEngine.backgroundPlaybackEnabled.value = v,
+                      ),
                       FilterChip(
                         label: const Text('Connected Speech'),
                         selected: controller.showPhonetic.value,
@@ -165,6 +195,21 @@ class Stage1DeepListeningView extends GetView<LessonController> {
                       ),
                     ],
                   ),
+                  if (loopOn || (playing && bgPlayOn)) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      [
+                        if (loopOn)
+                          'Non-Stop aktif: selesai baris terakhir otomatis mengulang dari baris 1.',
+                        if (bgPlayOn)
+                          'Tetap menyala saat kembali ke menu Home atau berpindah aplikasi.',
+                      ].join(' '),
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Color(0xFF94A3B8),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),

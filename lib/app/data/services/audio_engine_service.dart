@@ -16,18 +16,69 @@ class AudioEngineService extends GetxService {
   AudioPlayer? _sfxPlayer;
 
   final isPlayingVoice = false.obs;
+  final isSequencePlaying = false.obs;
   final isWaitingUserTurn = false.obs;
   final isAmbienceActive = false.obs;
+  final isLoopEnabled = false.obs;
+  final backgroundPlaybackEnabled = true.obs;
   final ambienceVolume = 0.25.obs;
   final activeLineIndex = (-1).obs;
   final playbackStatus = ''.obs;
 
+  final activeTopicMeta = Rxn<CurriculumTopicMeta>();
+  final activeTopicTitle = ''.obs;
+  final activeTotalLines = 0.obs;
+  final activeSlowMode = false.obs;
+  final activeRealSituation = false.obs;
+
+  bool get hasActiveBackgroundSession =>
+      (isPlayingVoice.value || isAmbienceActive.value) &&
+      !isWaitingUserTurn.value;
+
   int _voiceSessionToken = 0;
+  String? _activeAmbienceAsset;
+
+  void setActiveTopicContext({
+    CurriculumTopicMeta? meta,
+    required String title,
+    required int totalLines,
+  }) {
+    if (meta != null) activeTopicMeta.value = meta;
+    activeTopicTitle.value = title;
+    activeTotalLines.value = totalLines;
+  }
+
+  void toggleLoop() {
+    isLoopEnabled.value = !isLoopEnabled.value;
+  }
+
+  void toggleBackgroundPlayback() {
+    backgroundPlaybackEnabled.value = !backgroundPlaybackEnabled.value;
+  }
+
+  Future<void> _configureAudioContext(
+    AudioPlayer player, {
+    required bool isPrimaryVoice,
+  }) async {
+    try {
+      await player.setAudioContext(
+        AudioContextConfig(
+          route: AudioContextConfigRoute.system,
+          focus: isPrimaryVoice
+              ? AudioContextConfigFocus.gain
+              : AudioContextConfigFocus.mixWithOthers,
+          respectSilence: false,
+          stayAwake: true,
+        ).build(),
+      );
+    } catch (_) {}
+  }
 
   AudioPlayer _ensureVoicePlayer() {
     if (_voicePlayer != null) return _voicePlayer!;
     final player = AudioPlayer(playerId: 'voice_channel');
     unawaited(player.setReleaseMode(ReleaseMode.stop));
+    unawaited(_configureAudioContext(player, isPrimaryVoice: true));
     _voicePlayer = player;
     return player;
   }
@@ -36,6 +87,7 @@ class AudioEngineService extends GetxService {
     if (_ambiencePlayer != null) return _ambiencePlayer!;
     final player = AudioPlayer(playerId: 'ambience_channel');
     unawaited(player.setReleaseMode(ReleaseMode.loop));
+    unawaited(_configureAudioContext(player, isPrimaryVoice: false));
     _ambiencePlayer = player;
     return player;
   }
@@ -44,17 +96,14 @@ class AudioEngineService extends GetxService {
     if (_sfxPlayer != null) return _sfxPlayer!;
     final player = AudioPlayer(playerId: 'sfx_channel');
     unawaited(player.setReleaseMode(ReleaseMode.stop));
+    unawaited(_configureAudioContext(player, isPrimaryVoice: false));
     _sfxPlayer = player;
     return player;
   }
 
   Future<void> preloadTopicAssets(TopicData data) async {
     final paths = <String>{
-      if (data.audioAssets.ambienceLoop.isNotEmpty)
-        data.audioAssets.ambienceLoop,
-      if (data.audioAssets.sfxDoorChime.isNotEmpty)
-        data.audioAssets.sfxDoorChime,
-      if (data.audioAssets.sfxBookPat.isNotEmpty) data.audioAssets.sfxBookPat,
+      ...data.audioAssets.allSfxPaths,
       for (final line in data.dialogue.take(4)) line.audio,
     };
     for (final path in paths) {
@@ -82,7 +131,10 @@ class AudioEngineService extends GetxService {
   Future<void> startAmbience(String assetPath, {double? volume}) async {
     if (assetPath.isEmpty) return;
     if (volume != null) {
-      ambienceVolume.value = volume.clamp(0.0, 1.0);
+      await setAmbienceVolume(volume);
+    }
+    if (isAmbienceActive.value && _activeAmbienceAsset == assetPath) {
+      return;
     }
     try {
       final player = _ensureAmbiencePlayer();
@@ -91,6 +143,7 @@ class AudioEngineService extends GetxService {
         AssetSource(assetPath),
         volume: ambienceVolume.value,
       );
+      _activeAmbienceAsset = assetPath;
       isAmbienceActive.value = true;
     } catch (e) {
       playbackStatus.value = _formatAudioError(e);
@@ -103,6 +156,7 @@ class AudioEngineService extends GetxService {
         await _ambiencePlayer!.stop();
       }
     } catch (_) {}
+    _activeAmbienceAsset = null;
     isAmbienceActive.value = false;
   }
 
@@ -135,6 +189,7 @@ class AudioEngineService extends GetxService {
   Future<void> stopVoice() async {
     _voiceSessionToken++;
     isPlayingVoice.value = false;
+    isSequencePlaying.value = false;
     isWaitingUserTurn.value = false;
     activeLineIndex.value = -1;
     try {
@@ -154,6 +209,7 @@ class AudioEngineService extends GetxService {
 
   Future<void> playSingleAsset(String assetPath, {int lineIndex = -1}) async {
     final token = ++_voiceSessionToken;
+    isSequencePlaying.value = false;
     activeLineIndex.value = lineIndex;
     isPlayingVoice.value = true;
     final completed = await playAudioSource(
@@ -168,6 +224,7 @@ class AudioEngineService extends GetxService {
 
   Future<void> playRecordedAudio(String pathOrUrl, {int lineIndex = -1}) async {
     final token = ++_voiceSessionToken;
+    isSequencePlaying.value = false;
     activeLineIndex.value = lineIndex;
     isPlayingVoice.value = true;
     final source = kIsWeb ? UrlSource(pathOrUrl) : DeviceFileSource(pathOrUrl);
@@ -180,16 +237,25 @@ class AudioEngineService extends GetxService {
 
   /// Plays all dialogue lines sequentially.
   /// Slow mode plays native pre-generated `line.audioSlow` files without digital warping.
+  /// When [loop] (or [isLoopEnabled]) is true, automatically restarts from line 0 upon completion.
   Future<void> playDialogueSequence({
     required List<DialogueLine> lines,
     required bool slow,
     required bool withRealSituation,
     required AudioAssetsInfo assetsInfo,
     int startFromIndex = 0,
+    bool? loop,
+    Duration? interLinePause,
+    Duration? loopPause,
     void Function(int index)? onLineChanged,
   }) async {
+    if (lines.isEmpty) return;
     final token = ++_voiceSessionToken;
+    activeSlowMode.value = slow;
+    activeRealSituation.value = withRealSituation;
+    activeTotalLines.value = lines.length;
     isPlayingVoice.value = true;
+    isSequencePlaying.value = true;
 
     if (withRealSituation && assetsInfo.ambienceLoop.isNotEmpty) {
       await startAmbience(assetsInfo.ambienceLoop);
@@ -197,38 +263,58 @@ class AudioEngineService extends GetxService {
       await stopAmbience();
     }
 
-    for (var i = startFromIndex; i < lines.length; i++) {
-      if (token != _voiceSessionToken) return;
-      final line = lines[i];
-      activeLineIndex.value = line.index;
-      onLineChanged?.call(line.index);
+    var currentStart = startFromIndex.clamp(0, lines.length - 1);
+    final betweenLinesDelay =
+        interLinePause ?? Duration(milliseconds: slow ? 360 : 240);
+    final betweenLoopsDelay =
+        loopPause ?? Duration(milliseconds: slow ? 700 : 500);
 
-      if (withRealSituation && line.sfxBefore != null) {
-        await _triggerCueSfx(line.sfxBefore!, assetsInfo);
-        await Future<void>.delayed(const Duration(milliseconds: 220));
+    while (token == _voiceSessionToken) {
+      for (var i = currentStart; i < lines.length; i++) {
         if (token != _voiceSessionToken) return;
-      }
+        final line = lines[i];
+        activeLineIndex.value = line.index;
+        onLineChanged?.call(line.index);
+        if (token != _voiceSessionToken) return;
 
-      final assetPath = slow ? line.audioSlow : line.audio;
-      final completed = await playAudioSource(
-        AssetSource(assetPath),
-        token: token,
-      );
-      if (!completed || token != _voiceSessionToken) {
-        if (token == _voiceSessionToken) {
-          isPlayingVoice.value = false;
-          activeLineIndex.value = -1;
+        if (withRealSituation && line.sfxBefore != null) {
+          await _triggerCueSfx(line.sfxBefore!, assetsInfo);
+          await Future<void>.delayed(const Duration(milliseconds: 220));
+          if (token != _voiceSessionToken) return;
         }
-        return;
+
+        final assetPath = slow ? line.audioSlow : line.audio;
+        final completed = await playAudioSource(
+          AssetSource(assetPath),
+          token: token,
+        );
+        if (!completed || token != _voiceSessionToken) {
+          if (token == _voiceSessionToken) {
+            isPlayingVoice.value = false;
+            isSequencePlaying.value = false;
+            activeLineIndex.value = -1;
+          }
+          return;
+        }
+
+        if (betweenLinesDelay > Duration.zero) {
+          await Future<void>.delayed(betweenLinesDelay);
+        }
       }
 
-      await Future<void>.delayed(
-        Duration(milliseconds: slow ? 360 : 240),
-      );
+      if (token != _voiceSessionToken) return;
+      final shouldRepeat = loop ?? isLoopEnabled.value;
+      if (!shouldRepeat) break;
+
+      currentStart = 0;
+      if (betweenLoopsDelay > Duration.zero) {
+        await Future<void>.delayed(betweenLoopsDelay);
+      }
     }
 
     if (token == _voiceSessionToken) {
       isPlayingVoice.value = false;
+      isSequencePlaying.value = false;
       activeLineIndex.value = -1;
       if (withRealSituation) {
         await stopAmbience();
@@ -247,6 +333,7 @@ class AudioEngineService extends GetxService {
     void Function(int index)? onTurnChanged,
   }) async {
     final token = ++_voiceSessionToken;
+    isSequencePlaying.value = false;
     isPlayingVoice.value = true;
 
     if (useAmbience && assetsInfo.ambienceLoop.isNotEmpty && !isAmbienceActive.value) {
@@ -324,10 +411,9 @@ class AudioEngineService extends GetxService {
   }
 
   Future<void> _triggerCueSfx(String cue, AudioAssetsInfo info) async {
-    if (cue == 'door_chime' && info.sfxDoorChime.isNotEmpty) {
-      await playSfx(info.sfxDoorChime, volume: 0.78);
-    } else if (cue == 'book_pat' && info.sfxBookPat.isNotEmpty) {
-      await playSfx(info.sfxBookPat, volume: 0.75);
+    final path = info.resolveCue(cue);
+    if (path != null && path.isNotEmpty) {
+      await playSfx(path, volume: 0.78);
     }
   }
 
@@ -340,6 +426,13 @@ class AudioEngineService extends GetxService {
     playbackStatus.value = '';
     try {
       final player = _ensureVoicePlayer();
+      if (player.state == PlayerState.playing) {
+        await player.stop();
+      }
+      if (token != _voiceSessionToken) {
+        return false;
+      }
+
       final completer = Completer<bool>();
       late final StreamSubscription<void> sub;
       sub = player.onPlayerComplete.listen((_) {
@@ -347,14 +440,6 @@ class AudioEngineService extends GetxService {
           completer.complete(token == _voiceSessionToken);
         }
       });
-
-      if (player.state == PlayerState.playing) {
-        await player.stop();
-      }
-      if (token != _voiceSessionToken) {
-        await sub.cancel();
-        return false;
-      }
 
       await player.play(source, volume: 1.0);
 

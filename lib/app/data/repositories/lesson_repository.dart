@@ -49,6 +49,18 @@ class LessonRepository {
             estimatedSizeMb: 2.97,
           );
         }
+        if (lessonNum == 1 && topicNum == 2) {
+          return const CurriculumTopicMeta(
+            lessonNumber: 1,
+            topicNumber: 2,
+            title: 'Where Do You Live?',
+            subtitle: 'Hannah & Kenji — Rooftop Lounge Kantor',
+            level: 'A2 Foundation',
+            isReady: true,
+            jsonAssetPath: 'assets/data/lessons/lesson_01/topic_02.json',
+            estimatedSizeMb: 5.04,
+          );
+        }
 
         return CurriculumTopicMeta(
           lessonNumber: lessonNum,

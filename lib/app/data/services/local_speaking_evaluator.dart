@@ -11,14 +11,20 @@ class LocalSpeakingEvaluator {
     'hows': ['how is', 'how has', 'howz', 'howzit'],
     'thats': ['that is', 'that has'],
     'im': ['i am'],
+    'ill': ['i will'],
+    'ive': ['i have'],
     'wed': ['we had', 'we would'],
     'isnt': ['is not'],
+    'cant': ['cannot', 'can not'],
+    'dont': ['do not'],
+    'doesnt': ['does not'],
     'gotta': ['got to', 'going to', 'godda'],
     'catcha': ['catch ya', 'catch you'],
     'seeya': ['see ya', 'see you'],
     'you': ['ya'],
     'ya': ['you'],
     'chloe': ['c h l o e'],
+    'kenji': ['kenjiro'],
   };
 
   static const Set<String> _grammarFunctionWords = {
